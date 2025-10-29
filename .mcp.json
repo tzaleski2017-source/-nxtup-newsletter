@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "neon": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote@latest",
+        "https://mcp.neon.tech/mcp"
+      ],
+      "description": "Neon PostgreSQL database management via MCP for Twitch analytics platform"
+    }
+  }
+}

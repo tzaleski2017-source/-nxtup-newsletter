@@ -221,7 +221,7 @@ Combines:
 
 ## Project Components
 
-This platform consists of three main components:
+This platform consists of four main components:
 
 ### 1. Database Schema (`schema/`)
 PostgreSQL tables optimized for time-series analytics of streaming data.
@@ -256,6 +256,26 @@ Real-time data collection service that tracks active streamers.
 
 **See**: [ingestion/README.md](ingestion/README.md) for complete documentation
 
+### 4. Analytics Aggregation (`analyze.py`)
+Daily batch processing script that calculates 30-day rolling metrics.
+
+**Purpose**: Transforms raw time-series data into actionable insights stored in `streamer_statistics` table.
+
+**Key Features**:
+- SQL-heavy aggregation using CTEs (10x faster than Python)
+- Calculates engagement rate, follower velocity, category diversity
+- Idempotent operations (safe to re-run)
+- Designed for daily cron job execution
+
+**Usage**:
+```bash
+python analyze.py                    # Run for all active streamers
+python analyze.py --date 2024-03-15  # Run for specific date
+python analyze.py --dry-run          # Preview without writing
+```
+
+**See**: [docs/ANALYTICS.md](docs/ANALYTICS.md) for complete documentation
+
 ## Complete Workflow
 
 ```
@@ -281,18 +301,27 @@ Real-time data collection service that tracks active streamers.
 └────────────────────┬────────────────────────────────────────────┘
                      ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│ 4. Data Collection (Automatic)                                  │
+│ 4. Data Collection (Automatic, Continuous)                      │
 │    → Broadcasts created when streams go live                   │
 │    → Snapshots collected every 15 minutes                      │
 │    → Chat messages counted in real-time                        │
+│    → Raw data stored in broadcasts & broadcast_snapshots       │
 └────────────────────┬────────────────────────────────────────────┘
                      ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│ 5. Analysis & Modeling (Future)                                 │
-│    → Query historical data from database                       │
-│    → Calculate engagement metrics                              │
-│    → Train predictive models                                   │
-│    → Identify "hidden gems" for newsletter                     │
+│ 5. Analytics Aggregation (analyze.py - Daily Cron Job)          │
+│    → Calculate 30-day rolling metrics                          │
+│    → Aggregate engagement rate, follower velocity              │
+│    → Populate streamer_statistics table                        │
+│    → SQL-heavy processing (runs in ~1 min per 100 streamers)  │
+└────────────────────┬────────────────────────────────────────────┘
+                     ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 6. Analysis & Identification (Query streamer_statistics)        │
+│    → Query pre-computed metrics from database                  │
+│    → Identify "hidden gems" with high engagement               │
+│    → Filter by follower velocity and category diversity        │
+│    → Generate newsletter content                               │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -319,9 +348,27 @@ cd ingestion
 python -m ingestion.main
 ```
 
-### Step 4: Monitor & Analyze
+### Step 4: Run Analytics (After Collecting Data)
 ```bash
-# Check collected data
+# Run analytics for all active streamers
+python analyze.py
+
+# Or schedule as daily cron job (runs at 2 AM)
+echo "0 2 * * * cd /path/to/project && python analyze.py >> /var/log/analytics.log 2>&1" | crontab -
+```
+
+### Step 5: Query Insights
+```bash
+# Find top streamers by engagement
+psql $DATABASE_URL -c "
+SELECT username, avg_chat_rate, avg_concurrent_viewers, follower_velocity
+FROM streamer_statistics ss
+JOIN streamers s ON s.streamer_id = ss.streamer_id
+WHERE calculation_date = CURRENT_DATE
+ORDER BY avg_chat_rate DESC
+LIMIT 10;"
+
+# Monitor data collection
 psql $DATABASE_URL -c "SELECT COUNT(*) FROM broadcast_snapshots;"
 psql $DATABASE_URL -c "SELECT COUNT(*) FROM broadcasts WHERE ended_at IS NULL;"
 ```

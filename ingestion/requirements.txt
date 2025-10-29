@@ -1,0 +1,20 @@
+# Twitch Data Ingestion Service - Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core Twitch API Integration
+twitchAPI==4.1.0                # Twitch Helix API and EventSub
+twitchio==2.9.1                 # Twitch IRC for chat messages
+
+# Database
+asyncpg==0.29.0                 # Async PostgreSQL driver (high performance)
+
+# Scheduling
+APScheduler==3.10.4             # Job scheduling for 15-minute poller
+
+# Configuration Management
+pydantic==2.5.3                 # Data validation and settings
+pydantic-settings==2.1.0        # Environment variable loading
+python-dotenv==1.0.0            # .env file support
+
+# Utilities
+tenacity==8.2.3                 # Retry logic with exponential backoff

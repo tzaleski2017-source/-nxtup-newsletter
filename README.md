@@ -219,20 +219,112 @@ Combines:
 - Undiscovered bonus (30 points if avg_viewers < 200)
 - Popularity penalty (-50 points if avg_viewers > 1000)
 
-## Data Collection Pipeline (Future Work)
+## Project Components
 
-This schema is ready for data ingestion. Recommended approach:
+This platform consists of three main components:
 
-1. **Real-time Collection**: Use Twitch API to capture snapshots every 15 minutes
-2. **Broadcast Detection**: Poll for live streams, create broadcast records
-3. **Snapshot Capture**: Every 15 min during active broadcasts:
-   - Current viewer count
-   - Current follower count
-   - Chat message count (delta from last snapshot)
-4. **Batch Processing**: Daily jobs to:
-   - Compute broadcast aggregates (average_viewers, peak_viewers, etc.)
-   - Update streamer_statistics table
-   - Run ML models for prediction
+### 1. Database Schema (`schema/`)
+PostgreSQL tables optimized for time-series analytics of streaming data.
+
+### 2. Discovery Utility (`discover.py`)
+Command-line tool for finding and adding new streamers to track.
+
+**Purpose**: Populates the `streamers` table with interesting "hidden gem" candidates.
+
+**Usage**:
+```bash
+python discover.py --game-id 509658 --min-viewers 50 --max-viewers 250 --limit 10
+```
+
+**Features**:
+- Search by game category and viewer count
+- Automatic duplicate detection
+- Dry-run mode for testing
+- Detailed progress logging
+
+**See**: [DISCOVERY.md](DISCOVERY.md) for complete documentation
+
+### 3. Data Ingestion Service (`ingestion/`)
+Real-time data collection service that tracks active streamers.
+
+**Purpose**: Continuously collects viewership, follower, and chat engagement data.
+
+**Architecture**:
+- EventSub WebSocket: Stream start/end events
+- IRC Chat: Real-time message counting
+- Scheduled Poller: 15-minute metric snapshots
+
+**See**: [ingestion/README.md](ingestion/README.md) for complete documentation
+
+## Complete Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. Setup Database Schema                                        │
+│    → Execute schema/setup.sql                                   │
+│    → Tables created in PostgreSQL (Neon)                        │
+└────────────────────┬────────────────────────────────────────────┘
+                     ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 2. Discover Streamers (discover.py)                             │
+│    → Search Twitch for streamers matching criteria             │
+│    → Add to streamers table (is_active = true)                 │
+│    Example: 50-250 viewer "hidden gems"                        │
+└────────────────────┬────────────────────────────────────────────┘
+                     ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 3. Start Ingestion Service (ingestion/main.py)                  │
+│    → Loads active streamers from database                      │
+│    → Subscribes to stream events                               │
+│    → Joins IRC channels                                        │
+│    → Begins 15-minute snapshot collection                      │
+└────────────────────┬────────────────────────────────────────────┘
+                     ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 4. Data Collection (Automatic)                                  │
+│    → Broadcasts created when streams go live                   │
+│    → Snapshots collected every 15 minutes                      │
+│    → Chat messages counted in real-time                        │
+└────────────────────┬────────────────────────────────────────────┘
+                     ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 5. Analysis & Modeling (Future)                                 │
+│    → Query historical data from database                       │
+│    → Calculate engagement metrics                              │
+│    → Train predictive models                                   │
+│    → Identify "hidden gems" for newsletter                     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## Quick Start
+
+### Step 1: Database Setup
+```bash
+cd schema
+psql $DATABASE_URL -f setup.sql
+```
+
+### Step 2: Discover Streamers
+```bash
+# Find small "Just Chatting" streamers
+python discover.py --game-id 509658 --min-viewers 50 --max-viewers 250 --limit 10
+
+# Verify additions
+psql $DATABASE_URL -c "SELECT COUNT(*) FROM streamers WHERE is_active = true;"
+```
+
+### Step 3: Start Data Collection
+```bash
+cd ingestion
+python -m ingestion.main
+```
+
+### Step 4: Monitor & Analyze
+```bash
+# Check collected data
+psql $DATABASE_URL -c "SELECT COUNT(*) FROM broadcast_snapshots;"
+psql $DATABASE_URL -c "SELECT COUNT(*) FROM broadcasts WHERE ended_at IS NULL;"
+```
 
 ## Schema Modifications
 

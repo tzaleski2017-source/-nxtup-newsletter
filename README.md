@@ -221,7 +221,7 @@ Combines:
 
 ## Project Components
 
-This platform consists of four main components:
+This platform consists of five main components:
 
 ### 1. Database Schema (`schema/`)
 PostgreSQL tables optimized for time-series analytics of streaming data.
@@ -276,6 +276,35 @@ python analyze.py --dry-run          # Preview without writing
 
 **See**: [docs/ANALYTICS.md](docs/ANALYTICS.md) for complete documentation
 
+### 5. Predictive Model (`train_model.py`)
+Machine learning model that predicts "mega-streamer" potential (17k+ average viewers).
+
+**Purpose**: Identifies "hidden gems" with potential to become mega-streamers by analyzing their first 30 days of performance.
+
+**Key Features**:
+- XGBoost classifier trained on historical data
+- Handles severe class imbalance (mega-streamers are rare)
+- Focuses on Precision and Recall for positive class
+- Engineered features including `tune_in_ratio`
+- Prevents temporal data leakage
+
+**Usage**:
+```bash
+# Train model on historical data
+python train_model.py
+
+# Score new streamers
+python predict_streamer.py                  # Interactive mode
+python predict_streamer.py --batch file.csv # Batch predictions
+```
+
+**Model Metrics**:
+- Target Class 1 Precision: ≥0.60 (60% of predictions correct)
+- Target Class 1 Recall: ≥0.50 (finds 50%+ of mega-streamers)
+- ROC-AUC: ≥0.75 (good discrimination)
+
+**See**: [docs/MODEL_DOCUMENTATION.md](docs/MODEL_DOCUMENTATION.md) for complete documentation
+
 ## Complete Workflow
 
 ```
@@ -317,11 +346,20 @@ python analyze.py --dry-run          # Preview without writing
 └────────────────────┬────────────────────────────────────────────┘
                      ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│ 6. Analysis & Identification (Query streamer_statistics)        │
-│    → Query pre-computed metrics from database                  │
-│    → Identify "hidden gems" with high engagement               │
-│    → Filter by follower velocity and category diversity        │
-│    → Generate newsletter content                               │
+│ 6. Model Training (train_model.py - One-time / Periodic)        │
+│    → Extract features (first 30 days) and labels (peak perf)  │
+│    → Train XGBoost classifier with class imbalance handling   │
+│    → Evaluate on Precision/Recall for mega-streamer class     │
+│    → Save trained model: mega_streamer_model.joblib           │
+└────────────────────┬────────────────────────────────────────────┘
+                     ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ 7. Prediction & Talent Scouting (predict_streamer.py)           │
+│    → Load trained model                                        │
+│    → Score new "hidden gem" streamers                         │
+│    → Rank by mega-streamer potential (0-100%)                 │
+│    → Prioritize outreach to high-potential streamers          │
+│    → Generate newsletter content with predictions             │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -371,6 +409,19 @@ LIMIT 10;"
 # Monitor data collection
 psql $DATABASE_URL -c "SELECT COUNT(*) FROM broadcast_snapshots;"
 psql $DATABASE_URL -c "SELECT COUNT(*) FROM broadcasts WHERE ended_at IS NULL;"
+```
+
+### Step 6: Train Predictive Model (After Sufficient Data Collected)
+```bash
+# Train the mega-streamer prediction model
+# Requires data from both "hidden gems" AND established mega-streamers
+python train_model.py
+
+# View model performance
+cat model_evaluation_report.txt
+
+# Score new streamers
+python predict_streamer.py  # Interactive mode
 ```
 
 ## Schema Modifications

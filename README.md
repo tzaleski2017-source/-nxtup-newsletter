@@ -221,7 +221,7 @@ Combines:
 
 ## Project Components
 
-This platform consists of five main components:
+This platform consists of six main components:
 
 ### 1. Database Schema (`schema/`)
 PostgreSQL tables optimized for time-series analytics of streaming data.
@@ -229,7 +229,7 @@ PostgreSQL tables optimized for time-series analytics of streaming data.
 ### 2. Discovery Utility (`discover.py`)
 Command-line tool for finding and adding new streamers to track.
 
-**Purpose**: Populates the `streamers` table with interesting "hidden gem" candidates.
+**Purpose**: Populates the `streamers` table with interesting "hidden gem" candidates by searching Twitch categories.
 
 **Usage**:
 ```bash
@@ -244,7 +244,25 @@ python discover.py --game-id 509658 --min-viewers 50 --max-viewers 250 --limit 1
 
 **See**: [DISCOVERY.md](DISCOVERY.md) for complete documentation
 
-### 3. Data Ingestion Service (`ingestion/`)
+### 3. Add Streamer Utility (`add_streamer.py`)
+Simple command-line tool for adding known streamers by username.
+
+**Purpose**: Quick way to add specific streamers you discover while browsing Twitch.
+
+**Usage**:
+```bash
+python add_streamer.py --usernames shroud ninja     # Add multiple streamers
+python add_streamer.py --usernames xqc              # Add single streamer
+python add_streamer.py --dry-run --usernames test   # Preview mode
+```
+
+**Features**:
+- Add one or more streamers by username
+- Automatic duplicate detection (idempotent)
+- Fetches full profile from Twitch API
+- Instant tracking by ingestion service
+
+### 4. Data Ingestion Service (`ingestion/`)
 Real-time data collection service that tracks active streamers.
 
 **Purpose**: Continuously collects viewership, follower, and chat engagement data.
@@ -256,7 +274,7 @@ Real-time data collection service that tracks active streamers.
 
 **See**: [ingestion/README.md](ingestion/README.md) for complete documentation
 
-### 4. Analytics Aggregation (`analyze.py`)
+### 5. Analytics Aggregation (`analyze.py`)
 Daily batch processing script that calculates 30-day rolling metrics.
 
 **Purpose**: Transforms raw time-series data into actionable insights stored in `streamer_statistics` table.
@@ -276,7 +294,7 @@ python analyze.py --dry-run          # Preview without writing
 
 **See**: [docs/ANALYTICS.md](docs/ANALYTICS.md) for complete documentation
 
-### 5. Predictive Model (`train_model.py`)
+### 6. Predictive Model (`train_model.py`)
 Machine learning model that predicts "mega-streamer" potential (17k+ average viewers).
 
 **Purpose**: Identifies "hidden gems" with potential to become mega-streamers by analyzing their first 30 days of performance.
@@ -315,10 +333,11 @@ python predict_streamer.py --batch file.csv # Batch predictions
 └────────────────────┬────────────────────────────────────────────┘
                      ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│ 2. Discover Streamers (discover.py)                             │
-│    → Search Twitch for streamers matching criteria             │
-│    → Add to streamers table (is_active = true)                 │
-│    Example: 50-250 viewer "hidden gems"                        │
+│ 2. Add Streamers to Track                                       │
+│    → Option A: discover.py - Search by category/viewer count   │
+│    → Option B: add_streamer.py - Add by username               │
+│    → All added with is_active = true for tracking              │
+│    Example: python add_streamer.py --usernames shroud ninja    │
 └────────────────────┬────────────────────────────────────────────┘
                      ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -371,10 +390,13 @@ cd schema
 psql $DATABASE_URL -f setup.sql
 ```
 
-### Step 2: Discover Streamers
+### Step 2: Add Streamers to Track
 ```bash
-# Find small "Just Chatting" streamers
+# Option A: Search by category and viewer count
 python discover.py --game-id 509658 --min-viewers 50 --max-viewers 250 --limit 10
+
+# Option B: Add specific streamers by username (quick and simple)
+python add_streamer.py --usernames shroud ninja pokimane
 
 # Verify additions
 psql $DATABASE_URL -c "SELECT COUNT(*) FROM streamers WHERE is_active = true;"
